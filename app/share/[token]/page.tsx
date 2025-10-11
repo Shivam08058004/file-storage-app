@@ -155,16 +155,6 @@ export default function SharedFilePage() {
                 </video>
               </div>
             )}
-
-            {file.type === "application/pdf" && (
-              <div className="mt-8 w-full">
-                <iframe
-                  src={file.url}
-                  className="w-full h-[600px] rounded-lg border border-gray-200"
-                  title={file.name}
-                />
-              </div>
-            )}
           </div>
         </div>
 
