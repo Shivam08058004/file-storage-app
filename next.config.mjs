@@ -9,6 +9,14 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  webpack: (config, { isServer }) => {
+    // Exclude canvas from server-side bundle
+    if (isServer) {
+      config.externals = config.externals || []
+      config.externals.push('canvas')
+    }
+    return config
+  },
 }
 
 export default nextConfig

@@ -5,11 +5,11 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams
     const url = searchParams.get("url")
-    const filename = searchParams.get("filename")
+    const filename = searchParams.get("filename") || "download"
 
-    if (!url || !filename) {
+    if (!url) {
       return NextResponse.json(
-        { success: false, error: "Missing url or filename parameter" },
+        { success: false, error: "Missing url parameter" },
         { status: 400 }
       )
     }

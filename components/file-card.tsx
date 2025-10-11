@@ -1,12 +1,13 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { FileText, ImageIcon, Video, Table, Presentation, Folder, Download, Trash2, MoreVertical, Share2, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import type { FileMetadata } from "@/lib/types"
 import { formatFileSize, getFileIconType } from "@/lib/file-utils"
 import { useToast } from "@/hooks/use-toast"
+import { PdfThumbnail } from "@/components/pdf-thumbnail"
 
 interface FileCardProps {
   file: FileMetadata
@@ -38,6 +39,7 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
   const { toast } = useToast()
   
   const iconType = file.isFolder ? "folder" : getFileIconType(file.type)
+  const isPdf = file.type === "application/pdf"
   const Icon = iconMap[iconType as keyof typeof iconMap] || FileText
   const bgColor = file.isFolder ? "bg-blue-100" : colorMap[iconType as keyof typeof colorMap] || "bg-gray-200"
 
@@ -132,6 +134,8 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
       <div className={`aspect-square flex items-center justify-center ${bgColor} relative`}>
         {!file.isFolder && file.type.startsWith("image/") ? (
           <img src={file.url || "/placeholder.svg"} alt={file.name} className="w-full h-full object-cover" />
+        ) : !file.isFolder && isPdf ? (
+          <PdfThumbnail url={file.url || ""} filename={file.name} />
         ) : (
           <Icon className={`w-16 h-16 ${file.isFolder ? "text-blue-600" : "text-white"}`} strokeWidth={1.5} />
         )}
