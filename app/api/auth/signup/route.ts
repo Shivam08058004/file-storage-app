@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { supabaseAdmin } from "@/lib/supabase"
 import bcrypt from "bcryptjs"
+import {
+  generateVerificationToken,
+  getVerificationTokenExpiry,
+  sendVerificationEmail,
+} from "@/lib/email"
 
 export async function POST(request: NextRequest) {
   try {
@@ -38,7 +43,11 @@ export async function POST(request: NextRequest) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10)
 
-    // Create user
+    // Generate verification token
+    const verificationToken = generateVerificationToken()
+    const tokenExpiry = getVerificationTokenExpiry()
+
+    // Create user with verification token
     const { data: newUser, error } = await supabaseAdmin
       .from("users")
       .insert({
@@ -46,7 +55,9 @@ export async function POST(request: NextRequest) {
         name: name || null,
         password_hash: hashedPassword,
         provider: "email",
-        email_verified: false, // You can add email verification later
+        email_verified: false,
+        verification_token: verificationToken,
+        verification_token_expires: tokenExpiry.toISOString(),
       })
       .select()
       .single()
@@ -59,14 +70,41 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Send verification email
+    const emailResult = await sendVerificationEmail(
+      email,
+      verificationToken,
+      name
+    )
+
+    if (!emailResult.success) {
+      console.error("[v0] Email sending failed:", emailResult.error)
+      // User created but email failed - they can resend later
+      return NextResponse.json({
+        success: true,
+        message:
+          "Account created! We had trouble sending the verification email. Please check your email or request a new verification link.",
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          name: newUser.name,
+        },
+        emailSent: false,
+      })
+    }
+
+    console.log(`[v0] User created and verification email sent: ${email}`)
+
     return NextResponse.json({
       success: true,
-      message: "User created successfully",
+      message:
+        "Account created successfully! Please check your email to verify your account.",
       user: {
         id: newUser.id,
         email: newUser.email,
         name: newUser.name,
       },
+      emailSent: true,
     })
   } catch (error) {
     console.error("[v0] Signup error:", error)

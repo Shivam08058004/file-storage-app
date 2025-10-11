@@ -15,14 +15,46 @@ export async function getCurrentUser() {
  * Require authentication - throws error if not authenticated
  * Use this in API routes that need authentication
  */
-export async function requireAuth() {
+export async function requireAuth(requireVerification = true) {
   const user = await getCurrentUser()
   
   if (!user) {
     throw new Error("Unauthorized")
   }
   
+  // Check email verification if required
+  if (requireVerification) {
+    const isVerified = await isEmailVerified(user.id)
+    if (!isVerified) {
+      throw new Error("Email not verified")
+    }
+  }
+  
   return user
+}
+
+/**
+ * Check if user's email is verified
+ */
+export async function isEmailVerified(userId: string): Promise<boolean> {
+  const { supabaseAdmin } = await import("@/lib/supabase")
+  
+  const { data: user, error } = await supabaseAdmin
+    .from("users")
+    .select("email_verified, provider")
+    .eq("id", userId)
+    .single()
+  
+  if (error || !user) {
+    return false
+  }
+  
+  // OAuth users (Google) are automatically verified
+  if (user.provider === "google") {
+    return true
+  }
+  
+  return user.email_verified || false
 }
 
 /**
@@ -71,6 +103,16 @@ export function forbiddenResponse(message = "Access denied") {
 export function quotaExceededResponse() {
   return NextResponse.json(
     { success: false, error: "Storage quota exceeded. Please delete some files or upgrade your plan." },
+    { status: 403 }
+  )
+}
+
+/**
+ * Create an email not verified response
+ */
+export function emailNotVerifiedResponse() {
+  return NextResponse.json(
+    { success: false, error: "Please verify your email address before using this feature.", emailVerified: false },
     { status: 403 }
   )
 }

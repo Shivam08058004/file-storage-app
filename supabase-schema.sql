@@ -13,6 +13,8 @@ CREATE TABLE users (
   email_verified BOOLEAN DEFAULT false,
   password_hash TEXT, -- null for OAuth users
   provider TEXT DEFAULT 'email', -- 'google', 'email', etc.
+  verification_token TEXT, -- token for email verification
+  verification_token_expires TIMESTAMPTZ, -- expiration time for verification token
   storage_used BIGINT DEFAULT 0, -- bytes
   storage_limit BIGINT DEFAULT 10737418240, -- 10GB in bytes
   created_at TIMESTAMPTZ DEFAULT NOW(),

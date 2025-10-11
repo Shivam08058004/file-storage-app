@@ -56,24 +56,13 @@ export default function SignUpPage() {
         return
       }
 
-      // Sign in automatically after signup
-      const signInResult = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      })
-
-      if (signInResult?.error) {
-        setError("Account created but failed to sign in. Please sign in manually.")
-        setSuccess(true)
-        setTimeout(() => router.push("/auth/signin"), 2000)
-      } else {
-        setSuccess(true)
-        setTimeout(() => {
-          router.push("/")
-          router.refresh()
-        }, 1000)
-      }
+      // Show success message - user needs to verify email
+      setSuccess(true)
+      
+      // Redirect to verification page after 3 seconds
+      setTimeout(() => {
+        router.push("/auth/verify-email")
+      }, 3000)
     } catch (err) {
       setError("An error occurred. Please try again.")
     } finally {
@@ -111,10 +100,10 @@ export default function SignUpPage() {
           )}
 
           {success && (
-            <Alert>
-              <CheckCircle className="h-4 w-4" />
-              <AlertDescription>
-                Account created successfully! Redirecting...
+            <Alert className="border-green-200 bg-green-50">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                Account created successfully! Please check your email to verify your account before signing in.
               </AlertDescription>
             </Alert>
           )}

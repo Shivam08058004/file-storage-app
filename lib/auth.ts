@@ -79,18 +79,39 @@ export const authOptions: NextAuthOptions = {
   },
 
   callbacks: {
-    async jwt({ token, user, account }) {
+    async jwt({ token, user, account, trigger }) {
       // Initial sign in
       if (user) {
         token.id = user.id
         token.email = user.email
         token.name = user.name
         token.picture = user.image
+        
+        // Fetch email_verified status from database
+        const { data: dbUser } = await supabaseAdmin
+          .from("users")
+          .select("email_verified, provider")
+          .eq("id", user.id)
+          .single()
+        
+        token.emailVerified = dbUser?.email_verified || dbUser?.provider === "google"
+        token.provider = dbUser?.provider
       }
       
       // Store provider information
       if (account) {
         token.provider = account.provider
+      }
+      
+      // Refresh email_verified status on token update
+      if (trigger === "update" && token.id) {
+        const { data: dbUser } = await supabaseAdmin
+          .from("users")
+          .select("email_verified")
+          .eq("id", token.id as string)
+          .single()
+        
+        token.emailVerified = dbUser?.email_verified || false
       }
       
       return token
@@ -102,6 +123,7 @@ export const authOptions: NextAuthOptions = {
         session.user.email = token.email as string
         session.user.name = token.name as string
         session.user.image = token.picture as string
+        session.user.emailVerified = token.emailVerified as boolean
       }
       return session
     },

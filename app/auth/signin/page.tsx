@@ -34,8 +34,18 @@ export default function SignInPage() {
       if (result?.error) {
         setError(result.error)
       } else {
-        router.push("/")
-        router.refresh()
+        // Check if email is verified by fetching session
+        const checkResponse = await fetch("/api/auth/session")
+        const session = await checkResponse.json()
+        
+        if (session?.user && !session.user.emailVerified) {
+          // Redirect to verification page if not verified
+          router.push("/auth/verify-email")
+        } else {
+          // Proceed to dashboard if verified
+          router.push("/")
+          router.refresh()
+        }
       }
     } catch (err) {
       setError("An error occurred. Please try again.")

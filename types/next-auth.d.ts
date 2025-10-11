@@ -4,6 +4,7 @@ declare module "next-auth" {
   interface Session {
     user: {
       id: string
+      emailVerified: boolean
     } & DefaultSession["user"]
   }
 
@@ -19,5 +20,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     id: string
     provider?: string
+    emailVerified?: boolean
   }
 }
