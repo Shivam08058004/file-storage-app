@@ -8,6 +8,13 @@ export interface FileMetadata {
   thumbnail?: string
   isFolder?: boolean
   parentFolder?: string
+  shareToken?: string
+}
+
+export interface ShareLinkResponse {
+  success: boolean
+  shareUrl?: string
+  error?: string
 }
 
 export interface StorageStats {

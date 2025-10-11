@@ -1,10 +1,12 @@
 "use client"
 
-import { FileText, ImageIcon, Video, Table, Presentation, Folder, Download, Trash2, MoreVertical } from "lucide-react"
+import { useState } from "react"
+import { FileText, ImageIcon, Video, Table, Presentation, Folder, Download, Trash2, MoreVertical, Share2, Copy, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 import type { FileMetadata } from "@/lib/types"
 import { formatFileSize, getFileIconType } from "@/lib/file-utils"
+import { useToast } from "@/hooks/use-toast"
 
 interface FileCardProps {
   file: FileMetadata
@@ -31,6 +33,10 @@ const colorMap = {
 }
 
 export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
+  const [sharingLink, setSharingLink] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
+  const { toast } = useToast()
+  
   const iconType = file.isFolder ? "folder" : getFileIconType(file.type)
   const Icon = iconMap[iconType as keyof typeof iconMap] || FileText
   const bgColor = file.isFolder ? "bg-blue-100" : colorMap[iconType as keyof typeof colorMap] || "bg-gray-200"
@@ -54,6 +60,60 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
+  }
+
+  const handleShare = async () => {
+    if (file.isFolder) return
+    
+    try {
+      const response = await fetch("/api/files/share", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: file.id }),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.shareUrl) {
+        setSharingLink(data.shareUrl)
+        
+        // Copy to clipboard
+        await navigator.clipboard.writeText(data.shareUrl)
+        setCopied(true)
+        
+        toast({
+          title: "Share link created!",
+          description: "Link copied to clipboard",
+        })
+        
+        setTimeout(() => setCopied(false), 2000)
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to create share link",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("[v0] Share error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to create share link",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleCopyLink = async () => {
+    if (sharingLink) {
+      await navigator.clipboard.writeText(sharingLink)
+      setCopied(true)
+      toast({
+        title: "Copied!",
+        description: "Share link copied to clipboard",
+      })
+      setTimeout(() => setCopied(false), 2000)
+    }
   }
 
   const handleDelete = async () => {
@@ -86,10 +146,23 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {!file.isFolder && (
-                <DropdownMenuItem onClick={handleDownload}>
-                  <Download className="mr-2 h-4 w-4" />
-                  Download
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuItem onClick={handleDownload}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Download
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleShare}>
+                    <Share2 className="mr-2 h-4 w-4" />
+                    {sharingLink ? "Copy Link" : "Share"}
+                  </DropdownMenuItem>
+                  {sharingLink && (
+                    <DropdownMenuItem onClick={handleCopyLink}>
+                      {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+                      {copied ? "Copied!" : "Copy Link"}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                </>
               )}
               <DropdownMenuItem onClick={handleDelete} className="text-red-600">
                 <Trash2 className="mr-2 h-4 w-4" />

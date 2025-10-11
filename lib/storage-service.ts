@@ -4,6 +4,7 @@ import {
   ListObjectsV2Command,
   DeleteObjectCommand,
   HeadObjectCommand,
+  GetObjectCommand,
 } from "@aws-sdk/client-s3"
 import { Upload } from "@aws-sdk/lib-storage"
 import type { FileMetadata } from "./types"
@@ -201,6 +202,95 @@ export class StorageService {
     } catch (error) {
       console.error("[v0] Create folder error:", error)
       throw new Error("Failed to create folder")
+    }
+  }
+
+  /**
+   * Generate a shareable token for a file
+   */
+  async generateShareToken(fileId: string): Promise<string> {
+    try {
+      // Generate a unique share token
+      const shareToken = `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`
+      
+      // Store the mapping in S3 metadata (we'll use a marker file)
+      const markerKey = `.share/${shareToken}`
+      
+      const command = new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: markerKey,
+        Body: fileId, // Store the file ID in the marker
+        ContentType: "text/plain",
+      })
+
+      await this.s3Client.send(command)
+
+      return shareToken
+    } catch (error) {
+      console.error("[v0] Generate share token error:", error)
+      throw new Error("Failed to generate share token")
+    }
+  }
+
+  /**
+   * Get file metadata by share token
+   */
+  async getFileByShareToken(shareToken: string): Promise<FileMetadata | null> {
+    try {
+      // Get the file ID from the share marker
+      const markerKey = `.share/${shareToken}`
+      
+      const command = new HeadObjectCommand({
+        Bucket: this.bucketName,
+        Key: markerKey,
+      })
+
+      // Check if share token exists
+      try {
+        await this.s3Client.send(command)
+      } catch (err) {
+        return null // Share token not found
+      }
+
+      // Get the file ID from the marker body
+      const getCommand = new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: markerKey,
+      })
+
+      const response = await this.s3Client.send(getCommand)
+      
+      // Read the stream to get the file ID
+      const stream = response.Body
+      if (!stream) {
+        return null
+      }
+      
+      const chunks: Uint8Array[] = []
+      for await (const chunk of stream as any) {
+        chunks.push(chunk)
+      }
+      const fileId = Buffer.concat(chunks).toString('utf-8')
+
+      if (!fileId) {
+        return null
+      }
+
+      // Get all files and find the one matching the ID
+      const files = await this.listFiles()
+      const file = files.find((f) => f.id === fileId)
+
+      if (!file) {
+        return null
+      }
+
+      return {
+        ...file,
+        shareToken,
+      }
+    } catch (error) {
+      console.error("[v0] Get file by share token error:", error)
+      return null
     }
   }
 
