@@ -12,6 +12,7 @@ import { UploadDialog } from "@/components/upload-dialog"
 import { NewMenu } from "@/components/new-menu"
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
 import { signOut } from "next-auth/react"
+import { useToast } from "@/hooks/use-toast"
 import type { FileMetadata } from "@/lib/types"
 
 export default function Home() {
@@ -46,6 +47,7 @@ export default function Home() {
 }
 
 function DashboardContent({ session }: { session: any }) {
+  const { toast } = useToast()
   const [files, setFiles] = useState<FileMetadata[]>([])
   const [filteredFiles, setFilteredFiles] = useState<FileMetadata[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -122,12 +124,27 @@ function DashboardContent({ session }: { session: any }) {
       const data = await response.json()
 
       if (data.success) {
+        toast({
+          title: "Deleted successfully",
+          description: "The item has been deleted.",
+        })
         // Refresh files and stats
         fetchFiles()
         fetchStats()
+      } else {
+        toast({
+          title: "Delete failed",
+          description: data.error || "Failed to delete the item.",
+          variant: "destructive",
+        })
       }
     } catch (error) {
       console.error("[v0] Error deleting file:", error)
+      toast({
+        title: "Error",
+        description: "An error occurred while deleting.",
+        variant: "destructive",
+      })
     }
   }
 
