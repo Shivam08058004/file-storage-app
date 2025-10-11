@@ -1,7 +1,9 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { FolderOpen, ChevronRight, Home as HomeIcon } from "lucide-react"
+import { useSession } from "next-auth/react"
+import { useRouter } from "next/navigation"
+import { FolderOpen, ChevronRight, Home as HomeIcon, LogOut, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { SearchBar } from "@/components/search-bar"
 import { StorageIndicator } from "@/components/storage-indicator"
@@ -9,9 +11,41 @@ import { FileGrid } from "@/components/file-grid"
 import { UploadDialog } from "@/components/upload-dialog"
 import { NewMenu } from "@/components/new-menu"
 import { CreateFolderDialog } from "@/components/create-folder-dialog"
+import { signOut } from "next-auth/react"
 import type { FileMetadata } from "@/lib/types"
 
 export default function Home() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  
+  // Redirect to signin if not authenticated
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/auth/signin")
+    }
+  }, [status, router])
+
+  // Show loading while checking auth
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
+  // Don't render if not authenticated
+  if (!session) {
+    return null
+  }
+
+  return <DashboardContent session={session} />
+}
+
+function DashboardContent({ session }: { session: any }) {
   const [files, setFiles] = useState<FileMetadata[]>([])
   const [filteredFiles, setFilteredFiles] = useState<FileMetadata[]>([])
   const [searchQuery, setSearchQuery] = useState("")
@@ -140,10 +174,26 @@ export default function Home() {
               <h1 className="text-xl font-semibold text-gray-900">Cloud Storage</h1>
             </div>
 
-            {/* Search */}
+            {/* Search and User Menu */}
             <div className="flex items-center gap-4">
               <div className="w-64">
                 <SearchBar value={searchQuery} onChange={setSearchQuery} />
+              </div>
+              
+              {/* User Info */}
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <User className="h-4 w-4 text-gray-500" />
+                  <span className="text-gray-700">{session.user.email}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => signOut({ callbackUrl: "/auth/signin" })}
+                >
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
               </div>
             </div>
           </div>

@@ -42,13 +42,17 @@ export class StorageService {
 
   /**
    * Upload a file to storage
+   * @param file - File to upload
+   * @param userId - User ID for S3 path organization
+   * @param parentFolder - Optional parent folder path (relative to user's root)
    */
-  async uploadFile(file: File, parentFolder?: string): Promise<FileMetadata> {
+  async uploadFile(file: File, userId: string, parentFolder?: string): Promise<FileMetadata> {
     try {
       const timestamp = Date.now()
-      // If parentFolder is provided, prefix the key with the folder path
+      // Construct S3 key: userId/parentFolder?/timestamp-filename
       const fileName = `${timestamp}-${file.name}`
-      const key = parentFolder ? `${parentFolder}/${fileName}` : fileName
+      const folderPath = parentFolder ? `${parentFolder}/` : ""
+      const key = `${userId}/${folderPath}${fileName}`
       const buffer = Buffer.from(await file.arrayBuffer())
 
       const upload = new Upload({
@@ -72,7 +76,7 @@ export class StorageService {
         size: file.size,
         type: file.type,
         url: url,
-        uploadedAt: new Date(),
+        uploadedAt: new Date().toISOString(),
         parentFolder: parentFolder,
       }
     } catch (error) {
@@ -82,12 +86,14 @@ export class StorageService {
   }
 
   /**
-   * List all files in storage
+   * List all files for a specific user
+   * @param userId - User ID to filter files
    */
-  async listFiles(): Promise<FileMetadata[]> {
+  async listFiles(userId: string): Promise<FileMetadata[]> {
     try {
       const command = new ListObjectsV2Command({
         Bucket: this.bucketName,
+        Prefix: `${userId}/`, // Only list files under user's folder
       })
 
       const response = await this.s3Client.send(command)
@@ -134,7 +140,7 @@ export class StorageService {
             size: obj.Size || 0,
             type: isFolder ? "folder" : this.getFileType(key),
             url: isFolder ? "" : url,
-            uploadedAt: obj.LastModified || new Date(),
+            uploadedAt: obj.LastModified?.toISOString() || new Date().toISOString(),
             isFolder,
             parentFolder,
           }
@@ -173,12 +179,15 @@ export class StorageService {
 
   /**
    * Create a folder (virtual folder in S3 using a marker file)
+   * @param name - Folder name
+   * @param userId - User ID for S3 path organization
+   * @param parentFolder - Optional parent folder path (relative to user's root)
    */
-  async createFolder(name: string, parentFolder?: string): Promise<FileMetadata> {
+  async createFolder(name: string, userId: string, parentFolder?: string): Promise<FileMetadata> {
     try {
       // S3 doesn't have real folders, so we create a marker object
       const folderPath = parentFolder ? `${parentFolder}/${name}/` : `${name}/`
-      const key = `${folderPath}.foldermarker`
+      const key = `${userId}/${folderPath}.foldermarker`
 
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
@@ -195,7 +204,7 @@ export class StorageService {
         size: 0,
         type: "folder",
         url: "",
-        uploadedAt: new Date(),
+        uploadedAt: new Date().toISOString(),
         isFolder: true,
         parentFolder: parentFolder,
       }
@@ -276,16 +285,26 @@ export class StorageService {
         return null
       }
 
-      // Get all files and find the one matching the ID
-      const files = await this.listFiles()
-      const file = files.find((f) => f.id === fileId)
+      // fileId contains full S3 key (userId/path/to/file)
+      // Fetch the file directly from S3
+      const headCommand = new HeadObjectCommand({
+        Bucket: this.bucketName,
+        Key: fileId,
+      })
 
-      if (!file) {
-        return null
-      }
-
+      const fileMetadata = await this.s3Client.send(headCommand)
+      const url = `https://${this.bucketName}.s3.${this.region}.amazonaws.com/${fileId}`
+      
+      // Extract filename from key
+      const fileName = fileId.split('/').pop()?.replace(/^\d+-/, '') || fileId
+      
       return {
-        ...file,
+        id: fileId,
+        name: fileName,
+        size: fileMetadata.ContentLength || 0,
+        type: fileMetadata.ContentType || this.getFileType(fileId),
+        url: url,
+        uploadedAt: fileMetadata.LastModified?.toISOString() || new Date().toISOString(),
         shareToken,
       }
     } catch (error) {
@@ -295,18 +314,19 @@ export class StorageService {
   }
 
   /**
-   * Get storage statistics
+   * Get storage statistics for a user
+   * @param userId - User ID to get stats for
    */
-  async getStorageStats(): Promise<{ used: number; total: number }> {
+  async getStorageStats(userId: string): Promise<{ used: number; total: number }> {
     try {
-      const files = await this.listFiles()
+      const files = await this.listFiles(userId)
       const used = files.reduce((acc, file) => acc + file.size, 0)
-      const total = 100 * 1024 * 1024 * 1024 // 100 GB in bytes
+      const total = 10 * 1024 * 1024 * 1024 // 10 GB in bytes
 
       return { used, total }
     } catch (error) {
       console.error("[v0] Stats error:", error)
-      return { used: 0, total: 100 * 1024 * 1024 * 1024 }
+      return { used: 0, total: 10 * 1024 * 1024 * 1024 }
     }
   }
 
