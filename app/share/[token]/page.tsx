@@ -6,6 +6,7 @@ import { Download, ArrowLeft, FileText, ImageIcon, Video, Table, Presentation } 
 import { Button } from "@/components/ui/button"
 import type { FileMetadata } from "@/lib/types"
 import { formatFileSize, getFileIconType } from "@/lib/file-utils"
+import { PdfThumbnail } from "@/components/pdf-thumbnail"
 
 const iconMap = {
   document: FileText,
@@ -91,6 +92,7 @@ export default function SharedFilePage() {
 
   const iconType = getFileIconType(file.type)
   const Icon = iconMap[iconType as keyof typeof iconMap] || FileText
+  const isPdf = file.type === "application/pdf"
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -119,6 +121,10 @@ export default function SharedFilePage() {
                   alt={file.name} 
                   className="max-w-full max-h-96 rounded-lg object-contain"
                 />
+              ) : isPdf ? (
+                <div className="w-64">
+                  <PdfThumbnail url={file.url} filename={file.name} />
+                </div>
               ) : (
                 <Icon className="h-24 w-24 text-blue-600" strokeWidth={1.5} />
               )}
