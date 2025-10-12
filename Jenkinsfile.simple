@@ -41,19 +41,21 @@ pipeline {
         stage('Install Dependencies & Build') {
             steps {
                 echo '📚 Installing dependencies and building...'
-                sh '''
-                    # Install pnpm if not present
-                    if ! command -v pnpm &> /dev/null; then
-                        echo "Installing pnpm..."
-                        npm install -g pnpm
-                    fi
-                    
-                    # Install dependencies
-                    pnpm install --frozen-lockfile
-                    
-                    # Build Next.js app
-                    pnpm build
-                '''
+                nodejs(nodeJSInstallationName: 'NodeJS-20') {
+                    sh '''
+                        # Install pnpm if not present
+                        if ! command -v pnpm &> /dev/null; then
+                            echo "Installing pnpm..."
+                            npm install -g pnpm
+                        fi
+                        
+                        # Install dependencies
+                        pnpm install --frozen-lockfile
+                        
+                        # Build Next.js app
+                        pnpm build
+                    '''
+                }
             }
         }
         
