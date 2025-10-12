@@ -79,16 +79,33 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
       if (data.success && data.shareUrl) {
         setSharingLink(data.shareUrl)
         
-        // Copy to clipboard
-        await navigator.clipboard.writeText(data.shareUrl)
-        setCopied(true)
-        
-        toast({
-          title: "Share link created!",
-          description: "Link copied to clipboard",
-        })
-        
-        setTimeout(() => setCopied(false), 2000)
+        // Try to copy to clipboard (works on HTTPS or localhost)
+        try {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            await navigator.clipboard.writeText(data.shareUrl)
+            setCopied(true)
+            
+            toast({
+              title: "Share link created!",
+              description: "Link copied to clipboard",
+            })
+            
+            setTimeout(() => setCopied(false), 2000)
+          } else {
+            // Fallback for non-HTTPS: show link without copying
+            toast({
+              title: "Share link created!",
+              description: "Click the share icon again to see the link",
+            })
+          }
+        } catch (clipboardError) {
+          // Clipboard API blocked (non-HTTPS) - show link instead
+          console.log("[v0] Clipboard not available, link saved to state")
+          toast({
+            title: "Share link created!",
+            description: "Click the share icon again to copy the link",
+          })
+        }
       } else {
         toast({
           title: "Error",
@@ -108,13 +125,49 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
 
   const handleCopyLink = async () => {
     if (sharingLink) {
-      await navigator.clipboard.writeText(sharingLink)
-      setCopied(true)
-      toast({
-        title: "Copied!",
-        description: "Share link copied to clipboard",
-      })
-      setTimeout(() => setCopied(false), 2000)
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(sharingLink)
+          setCopied(true)
+          toast({
+            title: "Copied!",
+            description: "Share link copied to clipboard",
+          })
+          setTimeout(() => setCopied(false), 2000)
+        } else {
+          // Fallback: Use old-school selection method for non-HTTPS
+          const textArea = document.createElement("textarea")
+          textArea.value = sharingLink
+          textArea.style.position = "fixed"
+          textArea.style.left = "-999999px"
+          document.body.appendChild(textArea)
+          textArea.select()
+          try {
+            document.execCommand('copy')
+            setCopied(true)
+            toast({
+              title: "Copied!",
+              description: "Share link copied to clipboard",
+            })
+            setTimeout(() => setCopied(false), 2000)
+          } catch (err) {
+            // If even that fails, show the link
+            toast({
+              title: "Share Link",
+              description: sharingLink,
+              duration: 10000,
+            })
+          }
+          document.body.removeChild(textArea)
+        }
+      } catch (error) {
+        console.error("[v0] Copy error:", error)
+        toast({
+          title: "Share Link",
+          description: sharingLink,
+          duration: 10000,
+        })
+      }
     }
   }
 
