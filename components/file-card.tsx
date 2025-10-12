@@ -1,9 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { FileText, ImageIcon, Video, Table, Presentation, Folder, Download, Trash2, MoreVertical, Share2, Copy, Check } from "lucide-react"
+import { FileText, ImageIcon, Video, Table, Presentation, Folder, Download, Trash2, MoreVertical, Share2, Copy, Check, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import type { FileMetadata } from "@/lib/types"
 import { formatFileSize, getFileIconType } from "@/lib/file-utils"
 import { useToast } from "@/hooks/use-toast"
@@ -36,6 +38,7 @@ const colorMap = {
 export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
   const [sharingLink, setSharingLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [showShareDialog, setShowShareDialog] = useState(false)
   const { toast } = useToast()
   
   const iconType = file.isFolder ? "folder" : getFileIconType(file.type)
@@ -67,6 +70,12 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
   const handleShare = async () => {
     if (file.isFolder) return
     
+    // If link already exists, just show the dialog
+    if (sharingLink) {
+      setShowShareDialog(true)
+      return
+    }
+    
     try {
       const response = await fetch("/api/files/share", {
         method: "POST",
@@ -78,34 +87,12 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
 
       if (data.success && data.shareUrl) {
         setSharingLink(data.shareUrl)
+        setShowShareDialog(true)
         
-        // Try to copy to clipboard (works on HTTPS or localhost)
-        try {
-          if (navigator.clipboard && navigator.clipboard.writeText) {
-            await navigator.clipboard.writeText(data.shareUrl)
-            setCopied(true)
-            
-            toast({
-              title: "Share link created!",
-              description: "Link copied to clipboard",
-            })
-            
-            setTimeout(() => setCopied(false), 2000)
-          } else {
-            // Fallback for non-HTTPS: show link without copying
-            toast({
-              title: "Share link created!",
-              description: "Click the share icon again to see the link",
-            })
-          }
-        } catch (clipboardError) {
-          // Clipboard API blocked (non-HTTPS) - show link instead
-          console.log("[v0] Clipboard not available, link saved to state")
-          toast({
-            title: "Share link created!",
-            description: "Click the share icon again to copy the link",
-          })
-        }
+        toast({
+          title: "Share link created!",
+          description: "You can now copy and share the link",
+        })
       } else {
         toast({
           title: "Error",
@@ -123,51 +110,33 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
     }
   }
 
-  const handleCopyLink = async () => {
-    if (sharingLink) {
-      try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(sharingLink)
+  const handleCopyFromDialog = () => {
+    if (!sharingLink) return
+    
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(sharingLink)
+        .then(() => {
           setCopied(true)
           toast({
             title: "Copied!",
             description: "Share link copied to clipboard",
           })
           setTimeout(() => setCopied(false), 2000)
-        } else {
-          // Fallback: Use old-school selection method for non-HTTPS
-          const textArea = document.createElement("textarea")
-          textArea.value = sharingLink
-          textArea.style.position = "fixed"
-          textArea.style.left = "-999999px"
-          document.body.appendChild(textArea)
-          textArea.select()
-          try {
-            document.execCommand('copy')
-            setCopied(true)
-            toast({
-              title: "Copied!",
-              description: "Share link copied to clipboard",
-            })
-            setTimeout(() => setCopied(false), 2000)
-          } catch (err) {
-            // If even that fails, show the link
-            toast({
-              title: "Share Link",
-              description: sharingLink,
-              duration: 10000,
-            })
-          }
-          document.body.removeChild(textArea)
-        }
-      } catch (error) {
-        console.error("[v0] Copy error:", error)
-        toast({
-          title: "Share Link",
-          description: sharingLink,
-          duration: 10000,
         })
-      }
+        .catch(() => {
+          // Silently fail and let user copy manually
+          toast({
+            title: "Please copy manually",
+            description: "Select the link and press Ctrl+C",
+          })
+        })
+    } else {
+      // Fallback for non-HTTPS
+      toast({
+        title: "Please copy manually",
+        description: "Select the link and press Ctrl+C (or Cmd+C on Mac)",
+      })
     }
   }
 
@@ -210,14 +179,8 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={handleShare}>
                     <Share2 className="mr-2 h-4 w-4" />
-                    {sharingLink ? "Copy Link" : "Share"}
+                    Share
                   </DropdownMenuItem>
-                  {sharingLink && (
-                    <DropdownMenuItem onClick={handleCopyLink}>
-                      {copied ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
-                      {copied ? "Copied!" : "Copy Link"}
-                    </DropdownMenuItem>
-                  )}
                   <DropdownMenuSeparator />
                 </>
               )}
@@ -237,6 +200,50 @@ export function FileCard({ file, onDelete, onFolderClick }: FileCardProps) {
           {file.isFolder ? "Folder" : formatFileSize(file.size)}
         </p>
       </div>
+
+      {/* Share Dialog */}
+      <Dialog open={showShareDialog} onOpenChange={setShowShareDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Share File</DialogTitle>
+            <DialogDescription>
+              Anyone with this link can view and download this file.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex items-center space-x-2">
+            <div className="grid flex-1 gap-2">
+              <Input
+                id="share-link"
+                value={sharingLink || ""}
+                readOnly
+                onClick={(e) => e.currentTarget.select()}
+                className="font-mono text-sm"
+              />
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              className="px-3"
+              onClick={handleCopyFromDialog}
+            >
+              {copied ? (
+                <>
+                  <Check className="h-4 w-4" />
+                  <span className="sr-only">Copied</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-4 w-4" />
+                  <span className="sr-only">Copy</span>
+                </>
+              )}
+            </Button>
+          </div>
+          <div className="text-xs text-gray-500 mt-2">
+            💡 Tip: Click the link to select it, then press Ctrl+C (or Cmd+C on Mac) to copy manually.
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
