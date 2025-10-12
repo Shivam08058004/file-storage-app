@@ -57,16 +57,16 @@ pipeline {
                         echo "Creating .env file with build-time variables..."
                         cat > .env << 'ENVFILE'
 # Placeholder .env for build - runtime values loaded from host
-NEXT_PUBLIC_SUPABASE_URL=placeholder
-NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder
-SUPABASE_SERVICE_ROLE_KEY=placeholder
-AWS_ACCESS_KEY_ID=placeholder
-AWS_SECRET_ACCESS_KEY=placeholder
-AWS_S3_BUCKET_NAME=placeholder
+NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MDAsImV4cCI6MTk2MDc2ODgwMH0.placeholder
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY0NTE5MjgwMCwiZXhwIjoxOTYwNzY4ODAwfQ.placeholder
+AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
+AWS_S3_BUCKET_NAME=placeholder-bucket
 AWS_REGION=us-east-1
 NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=placeholder
-RESEND_API_KEY=placeholder
+NEXTAUTH_SECRET=placeholder-secret-key-for-build-only
+RESEND_API_KEY=re_placeholder_key
 EMAIL_FROM=noreply@example.com
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ENVFILE
