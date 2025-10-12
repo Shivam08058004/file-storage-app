@@ -52,6 +52,14 @@ pipeline {
                         # Install dependencies
                         pnpm install --frozen-lockfile
                         
+                        # Copy .env file from deployment directory if it exists
+                        if [ -f ${DEPLOY_DIR}/.env ]; then
+                            echo "Copying .env file..."
+                            cp ${DEPLOY_DIR}/.env .env
+                        else
+                            echo "Warning: .env file not found at ${DEPLOY_DIR}/.env"
+                        fi
+                        
                         # Build Next.js app
                         pnpm build
                     '''
