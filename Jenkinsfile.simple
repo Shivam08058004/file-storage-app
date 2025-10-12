@@ -52,13 +52,26 @@ pipeline {
                         # Install dependencies
                         pnpm install --frozen-lockfile
                         
-                        # Copy .env file from deployment directory if it exists
-                        if [ -f ${DEPLOY_DIR}/.env ]; then
-                            echo "Copying .env file..."
-                            cp ${DEPLOY_DIR}/.env .env
-                        else
-                            echo "Warning: .env file not found at ${DEPLOY_DIR}/.env"
-                        fi
+                        # Create .env file with required variables
+                        # Jenkins container can't access host filesystem, so we create it here
+                        echo "Creating .env file with build-time variables..."
+                        cat > .env << 'ENVFILE'
+# Placeholder .env for build - runtime values loaded from host
+NEXT_PUBLIC_SUPABASE_URL=placeholder
+NEXT_PUBLIC_SUPABASE_ANON_KEY=placeholder
+SUPABASE_SERVICE_ROLE_KEY=placeholder
+AWS_ACCESS_KEY_ID=placeholder
+AWS_SECRET_ACCESS_KEY=placeholder
+AWS_S3_BUCKET_NAME=placeholder
+AWS_REGION=us-east-1
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=placeholder
+RESEND_API_KEY=placeholder
+EMAIL_FROM=noreply@example.com
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+ENVFILE
+                        
+                        echo ".env file created for build"
                         
                         # Build Next.js app
                         pnpm build
