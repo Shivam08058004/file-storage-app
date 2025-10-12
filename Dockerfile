@@ -27,9 +27,9 @@ EXPOSE 3000
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Health check
+# Health check - Simple connectivity test (no auth required)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3000/api/files/stats || exit 1
+  CMD curl -f http://localhost:3000/ || exit 1
 
 # Start the application
 CMD ["node_modules/.bin/next", "start"]
