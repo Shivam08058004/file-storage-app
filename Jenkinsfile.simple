@@ -101,16 +101,9 @@ ENVFILE
                     docker stop ${APP_NAME} || true
                     docker rm ${APP_NAME} || true
                     
-                    # Verify .env file exists on host
-                    if [ ! -f ${DEPLOY_DIR}/.env ]; then
-                        echo "ERROR: .env file not found at ${DEPLOY_DIR}/.env"
-                        echo "Please ensure .env file exists on EC2 host"
-                        exit 1
-                    fi
-                    
-                    echo "✓ Found .env file at ${DEPLOY_DIR}/.env"
-                    
                     # Start new container with updated image
+                    # Note: .env file must exist at ${DEPLOY_DIR}/.env on EC2 host
+                    echo "Starting container with env file from ${DEPLOY_DIR}/.env"
                     docker run -d \\
                         --name ${APP_NAME} \\
                         --network app-network \\
