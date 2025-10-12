@@ -9,6 +9,8 @@ const nextConfig = {
   images: {
     unoptimized: true,
   },
+  // Enable standalone output for Docker
+  output: 'standalone',
   webpack: (config, { isServer }) => {
     // Exclude canvas from server-side bundle
     if (isServer) {
