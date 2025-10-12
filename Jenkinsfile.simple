@@ -33,8 +33,6 @@ pipeline {
                     node --version || echo "Node not in PATH"
                     echo "Docker version:"
                     docker --version
-                    echo "Docker Compose version:"
-                    docker compose version
                     echo "Workspace: ${WORKSPACE}"
                 '''
             }
@@ -61,11 +59,9 @@ pipeline {
         
         stage('Build Docker Image') {
             steps {
-                echo '🐳 Building Docker image locally...'
+                echo '🐳 Building Docker image...'
                 sh """
-                    cd ${DEPLOY_DIR}
-                    
-                    # Build the image
+                    # Build the image from current workspace
                     docker build -t ${APP_NAME}:latest .
                     
                     # Show image info
@@ -78,20 +74,25 @@ pipeline {
             steps {
                 echo '🚀 Deploying application...'
                 sh """
-                    cd ${DEPLOY_DIR}
-                    
                     # Stop and remove old container
-                    docker compose down nextjs-app || true
+                    docker stop ${APP_NAME} || true
+                    docker rm ${APP_NAME} || true
                     
-                    # Start new container
-                    docker compose up -d nextjs-app
+                    # Start new container with updated image
+                    docker run -d \\
+                        --name ${APP_NAME} \\
+                        --network app-network \\
+                        -p 3000:3000 \\
+                        --env-file ${DEPLOY_DIR}/.env \\
+                        --restart always \\
+                        ${APP_NAME}:latest
                     
                     # Wait for startup
                     echo "Waiting for application to start..."
                     sleep 15
                     
                     # Check container status
-                    docker compose ps nextjs-app
+                    docker ps | grep ${APP_NAME}
                 """
             }
         }
@@ -106,7 +107,7 @@ pipeline {
                     # Check if container is running
                     if ! docker ps | grep -q ${APP_NAME}; then
                         echo "Container not running!"
-                        docker compose logs nextjs-app
+                        docker logs ${APP_NAME}
                         exit 1
                     fi
                     
@@ -114,12 +115,12 @@ pipeline {
                     echo "Testing homepage..."
                     curl -f http://localhost:3000/ > /dev/null || {
                         echo "Homepage check failed!"
-                        docker compose logs nextjs-app --tail=50
+                        docker logs ${APP_NAME} --tail=50
                         exit 1
                     }
                     
                     echo "✅ Health check passed!"
-                    docker compose logs nextjs-app --tail=20
+                    docker logs ${APP_NAME} --tail=20
                 """
             }
         }
@@ -152,9 +153,8 @@ pipeline {
             echo '❌ Check logs above for details'
             echo '❌ =================================='
             sh """
-                cd ${DEPLOY_DIR}
                 echo "Container logs:"
-                docker compose logs nextjs-app --tail=50 || true
+                docker logs ${APP_NAME} --tail=50 || true
             """
         }
         
