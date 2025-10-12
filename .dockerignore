@@ -1,12 +1,12 @@
-# Dependencies
-node_modules
+# Dependencies (we need node_modules for runtime, so commenting out)
+# node_modules
 npm-debug.log
 pnpm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Build outputs
-.next
+# Build outputs (we need .next for the built app, so commenting out)
+# .next
 out
 dist
 build
