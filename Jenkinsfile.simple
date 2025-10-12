@@ -1,0 +1,169 @@
+pipeline {
+    agent any
+    
+    environment {
+        APP_NAME = 'file-storage-app'
+        DEPLOY_DIR = '/home/ubuntu/app'
+    }
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timestamps()
+        timeout(time: 20, unit: 'MINUTES')
+    }
+    
+    stages {
+        stage('Checkout') {
+            steps {
+                echo '📦 Checking out code from GitHub...'
+                checkout scm
+                sh 'git rev-parse --short HEAD > .git/commit-hash'
+                script {
+                    env.GIT_COMMIT_HASH = readFile('.git/commit-hash').trim()
+                    echo "Building commit: ${env.GIT_COMMIT_HASH}"
+                }
+            }
+        }
+        
+        stage('Environment Check') {
+            steps {
+                echo '🔧 Checking environment...'
+                sh '''
+                    echo "Node version:"
+                    node --version || echo "Node not in PATH"
+                    echo "Docker version:"
+                    docker --version
+                    echo "Docker Compose version:"
+                    docker compose version
+                    echo "Workspace: ${WORKSPACE}"
+                '''
+            }
+        }
+        
+        stage('Install Dependencies & Build') {
+            steps {
+                echo '📚 Installing dependencies and building...'
+                sh '''
+                    # Install pnpm if not present
+                    if ! command -v pnpm &> /dev/null; then
+                        echo "Installing pnpm..."
+                        npm install -g pnpm
+                    fi
+                    
+                    # Install dependencies
+                    pnpm install --frozen-lockfile
+                    
+                    # Build Next.js app
+                    pnpm build
+                '''
+            }
+        }
+        
+        stage('Build Docker Image') {
+            steps {
+                echo '🐳 Building Docker image locally...'
+                sh """
+                    cd ${DEPLOY_DIR}
+                    
+                    # Build the image
+                    docker build -t ${APP_NAME}:latest .
+                    
+                    # Show image info
+                    docker images ${APP_NAME}:latest
+                """
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                echo '🚀 Deploying application...'
+                sh """
+                    cd ${DEPLOY_DIR}
+                    
+                    # Stop and remove old container
+                    docker compose down nextjs-app || true
+                    
+                    # Start new container
+                    docker compose up -d nextjs-app
+                    
+                    # Wait for startup
+                    echo "Waiting for application to start..."
+                    sleep 15
+                    
+                    # Check container status
+                    docker compose ps nextjs-app
+                """
+            }
+        }
+        
+        stage('Health Check') {
+            steps {
+                echo '🏥 Running health checks...'
+                sh """
+                    # Wait a bit more
+                    sleep 5
+                    
+                    # Check if container is running
+                    if ! docker ps | grep -q ${APP_NAME}; then
+                        echo "Container not running!"
+                        docker compose logs nextjs-app
+                        exit 1
+                    fi
+                    
+                    # Test homepage
+                    echo "Testing homepage..."
+                    curl -f http://localhost:3000/ > /dev/null || {
+                        echo "Homepage check failed!"
+                        docker compose logs nextjs-app --tail=50
+                        exit 1
+                    }
+                    
+                    echo "✅ Health check passed!"
+                    docker compose logs nextjs-app --tail=20
+                """
+            }
+        }
+        
+        stage('Cleanup') {
+            steps {
+                echo '🧹 Cleaning up old images...'
+                sh '''
+                    # Remove dangling images
+                    docker image prune -f
+                    
+                    # Show disk usage
+                    docker system df
+                '''
+            }
+        }
+    }
+    
+    post {
+        success {
+            echo '✅ =================================='
+            echo '✅ Pipeline completed successfully!'
+            echo '✅ Application deployed and running'
+            echo '✅ =================================='
+        }
+        
+        failure {
+            echo '❌ =================================='
+            echo '❌ Pipeline failed!'
+            echo '❌ Check logs above for details'
+            echo '❌ =================================='
+            sh """
+                cd ${DEPLOY_DIR}
+                echo "Container logs:"
+                docker compose logs nextjs-app --tail=50 || true
+            """
+        }
+        
+        always {
+            echo '📊 Build summary:'
+            sh '''
+                echo "Workspace size:"
+                du -sh ${WORKSPACE} || true
+            '''
+        }
+    }
+}
