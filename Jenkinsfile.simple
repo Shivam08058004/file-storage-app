@@ -101,12 +101,22 @@ ENVFILE
                     docker stop ${APP_NAME} || true
                     docker rm ${APP_NAME} || true
                     
+                    # Check if .env file exists on host, if not, use build .env
+                    if [ -f ${DEPLOY_DIR}/.env ]; then
+                        echo "Using .env from ${DEPLOY_DIR}/.env"
+                        ENV_FILE_ARG="--env-file ${DEPLOY_DIR}/.env"
+                    else
+                        echo "WARNING: No .env file found at ${DEPLOY_DIR}/.env"
+                        echo "Starting container without env file (will use placeholder values from build)"
+                        ENV_FILE_ARG=""
+                    fi
+                    
                     # Start new container with updated image
                     docker run -d \\
                         --name ${APP_NAME} \\
                         --network app-network \\
                         -p 3000:3000 \\
-                        --env-file ${DEPLOY_DIR}/.env \\
+                        \${ENV_FILE_ARG} \\
                         --restart always \\
                         ${APP_NAME}:latest
                     
