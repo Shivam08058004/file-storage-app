@@ -25,8 +25,9 @@ services:
       # NextAuth
       - NEXTAUTH_URL=${NEXTAUTH_URL}
       - NEXTAUTH_SECRET=${NEXTAUTH_SECRET}
-      # Email
-      - RESEND_API_KEY=${RESEND_API_KEY}
+      # Email (Gmail)
+      - GMAIL_USER=${GMAIL_USER}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
       - EMAIL_FROM=${EMAIL_FROM}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/files/stats"]
