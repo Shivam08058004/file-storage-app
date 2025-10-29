@@ -145,10 +145,9 @@ ENVFILE
                         exit 1
                     fi
                     
-                    # Test homepage using container name on app-network
-                    echo "Testing homepage via container network..."
-                    docker run --rm --network app-network alpine/curl:latest \
-                        curl -f http://${APP_NAME}:3000/ > /dev/null || {
+                    # Test homepage using localhost (since we're using host network)
+                    echo "Testing homepage on localhost:3000..."
+                    curl -f http://localhost:3000/ > /dev/null 2>&1 || {
                         echo "Homepage check failed!"
                         docker logs ${APP_NAME} --tail=50
                         exit 1
