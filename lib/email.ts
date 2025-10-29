@@ -1,12 +1,18 @@
 /**
  * Email Utility Functions
- * Uses Resend API for sending transactional emails
+ * Uses Nodemailer with Gmail for sending transactional emails
  */
 
-import { Resend } from "resend"
+import nodemailer from "nodemailer"
 
-// Initialize Resend client
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Initialize Gmail transporter
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+})
 
 /**
  * Generate a secure random verification token
@@ -39,9 +45,9 @@ export async function sendVerificationEmail(
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3001"
     const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`
 
-    const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+    const msg = {
       to: email,
+      from: process.env.EMAIL_FROM || "your-verified-email@example.com",
       subject: "Verify your email address",
       html: `
         <!DOCTYPE html>
@@ -104,14 +110,10 @@ export async function sendVerificationEmail(
           </body>
         </html>
       `,
-    })
-
-    if (error) {
-      console.error("[v0] Email sending error:", error)
-      return { success: false, error: error.message }
     }
 
-    console.log("[v0] Verification email sent:", data?.id)
+    await transporter.sendMail(msg)
+    console.log("[v0] Verification email sent to:", email)
     return { success: true }
   } catch (error) {
     console.error("[v0] Email sending error:", error)
@@ -135,9 +137,9 @@ export async function sendVerificationReminder(
     const baseUrl = process.env.NEXTAUTH_URL || "http://localhost:3001"
     const verificationUrl = `${baseUrl}/auth/verify-email?token=${token}`
 
-    const { data, error } = await resend.emails.send({
-      from: process.env.EMAIL_FROM || "onboarding@resend.dev",
+    const msg = {
       to: email,
+      from: process.env.EMAIL_FROM || "your-verified-email@example.com",
       subject: "Reminder: Verify your email address",
       html: `
         <!DOCTYPE html>
@@ -166,12 +168,9 @@ export async function sendVerificationReminder(
           </body>
         </html>
       `,
-    })
-
-    if (error) {
-      return { success: false, error: error.message }
     }
 
+    await transporter.sendMail(msg)
     return { success: true }
   } catch (error) {
     return {

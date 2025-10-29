@@ -1,5 +1,5 @@
 import { NextAuthOptions } from "next-auth"
-import GoogleProvider from "next-auth/providers/google"
+// import GoogleProvider from "next-auth/providers/google" // Disabled - requires payment
 import CredentialsProvider from "next-auth/providers/credentials"
 import { SupabaseAdapter } from "@auth/supabase-adapter"
 import { supabaseAdmin } from "@/lib/supabase"
@@ -12,11 +12,11 @@ export const authOptions: NextAuthOptions = {
   }),
   
   providers: [
-    // Google OAuth Provider
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
+    // Google OAuth Provider - DISABLED (requires payment verification)
+    // GoogleProvider({
+    //   clientId: process.env.GOOGLE_CLIENT_ID!,
+    //   clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+    // }),
     
     // Email/Password Credentials Provider
     CredentialsProvider({
