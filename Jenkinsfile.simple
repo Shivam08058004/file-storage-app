@@ -111,6 +111,14 @@ ENVFILE
                         exit 1
                     fi
                     
+                    # Create Docker network if it doesn't exist
+                    if ! docker network ls | grep -q app-network; then
+                        echo "Creating app-network..."
+                        docker network create app-network
+                    else
+                        echo "Network app-network already exists"
+                    fi
+                    
                     # Start new container with updated image
                     echo "Starting container with env file..."
                     docker run -d \\
