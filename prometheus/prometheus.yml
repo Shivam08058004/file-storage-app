@@ -1,23 +1,12 @@
 # Prometheus Configuration
-# Scrapes metrics from all services in the Docker Compose stack
+# Scrapes metrics from Docker containers and system
 
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
   external_labels:
-    cluster: 'docker-compose'
+    cluster: 'file-storage-app'
     environment: 'production'
-
-# Alertmanager configuration (optional)
-# alerting:
-#   alertmanagers:
-#     - static_configs:
-#         - targets:
-#           - alertmanager:9093
-
-# Rule files for alerts
-rule_files:
-  # - 'alerts/*.yml'
 
 scrape_configs:
   # Prometheus itself
@@ -27,45 +16,17 @@ scrape_configs:
         labels:
           service: 'prometheus'
 
-  # Node Exporter - System metrics
+  # Node Exporter - System metrics (CPU, Memory, Disk, Network)
   - job_name: 'node-exporter'
     static_configs:
       - targets: ['node-exporter:9100']
         labels:
           service: 'system'
-          instance: 'ec2-main'
+          instance: 'ec2-file-storage'
 
-  # cAdvisor - Container metrics
+  # cAdvisor - Container metrics (Docker containers)
   - job_name: 'cadvisor'
     static_configs:
       - targets: ['cadvisor:8080']
         labels:
           service: 'containers'
-
-  # Next.js Application - Custom metrics (if you add prometheus client)
-  - job_name: 'nextjs-app'
-    static_configs:
-      - targets: ['nextjs-app:3000']
-        labels:
-          service: 'nextjs'
-          app: 'file-storage'
-    metrics_path: '/api/metrics'
-    scrape_interval: 30s
-
-  # Jenkins - Jenkins metrics plugin
-  - job_name: 'jenkins'
-    static_configs:
-      - targets: ['jenkins:8080']
-        labels:
-          service: 'jenkins'
-    metrics_path: '/prometheus'
-    scrape_interval: 60s
-
-  # Grafana - Internal metrics
-  - job_name: 'grafana'
-    static_configs:
-      - targets: ['grafana:3000']
-        labels:
-          service: 'grafana'
-    metrics_path: '/metrics'
-    scrape_interval: 30s
