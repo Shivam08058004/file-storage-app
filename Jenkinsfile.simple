@@ -142,14 +142,14 @@ ENVFILE
         stage('Health Check') {
             steps {
                 echo '🏥 Running health checks...'
-                sh """
+                sh '''
                     # Wait for app startup
                     sleep 10
                     
                     # Check if container is running
-                    if ! docker ps | grep -q ${APP_NAME}; then
+                    if ! docker ps | grep -q file-storage-app; then
                         echo "❌ Container not running!"
-                        docker logs ${APP_NAME}
+                        docker logs file-storage-app
                         exit 1
                     fi
                     
@@ -158,27 +158,20 @@ ENVFILE
                     # Test homepage using localhost (since we're using host network)
                     echo "Testing homepage on localhost:3000..."
                     
-                    # Try curl with verbose output to debug
-                    RESPONSE=\$(curl -v http://localhost:3000/ 2>&1)
-                    CURL_EXIT=\$?
-                    
-                    echo "Curl response:"
-                    echo "\$RESPONSE"
-                    echo "Curl exit code: \$CURL_EXIT"
-                    
-                    # Accept both successful response (0) and "failed to verify" (60) as OK
-                    # since we're testing connectivity, not SSL
-                    if [ \$CURL_EXIT -eq 0 ] || [ \$CURL_EXIT -eq 52 ] || echo "\$RESPONSE" | grep -q "HTTP\|<html\|doctype"; then
-                        echo "✅ Health check passed! App is responding."
+                    # Try curl with simple check first
+                    if curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/ | grep -q "200\\|301\\|302"; then
+                        echo "✅ Health check passed! App is responding with valid HTTP status."
+                        docker logs file-storage-app --tail=10
                     else
-                        echo "❌ Health check failed! App not responding properly."
+                        echo "❌ Health check failed! Testing with verbose output..."
+                        curl -v http://localhost:3000/
                         echo "Container logs:"
-                        docker logs ${APP_NAME} --tail=50
+                        docker logs file-storage-app --tail=50
                         exit 1
                     fi
                     
                     echo "✅ Application is healthy and ready!"
-                """
+                '''
             }
         }
         
