@@ -3,9 +3,11 @@
 ## Project Overview
 Next.js 15 file storage application with NextAuth authentication (Google OAuth + email/password), Supabase PostgreSQL database, AWS S3 storage, and Docker deployment with Jenkins CI/CD pipeline. Built with shadcn/ui and TypeScript.
 
+**Tech Stack:** Next.js 15 (App Router) • NextAuth.js • Supabase (PostgreSQL) • AWS S3 • Docker • Jenkins • shadcn/ui • TypeScript • pnpm
+
 ## Architecture: Dual Persistence Pattern
 
-**Critical:** Files have dual persistence - S3 stores binary data, Supabase stores metadata. Both must stay in sync.
+**Critical:** Files have dual persistence - S3 stores binary data, Supabase stores metadata. Both must stay in sync. This is the most important architectural constraint of the entire system.
 
 ### Storage Layer (Singleton)
 - **`lib/storage-service.ts`** - S3 operations only (upload, delete, list)
@@ -23,27 +25,31 @@ Next.js 15 file storage application with NextAuth authentication (Google OAuth +
 ```
 app/api/
 ├── auth/
-│   ├── [...nextauth]/route.ts  - NextAuth handler
-│   ├── signup/route.ts         - Email signup with bcrypt
-│   └── verify-email/route.ts   - Email verification
+│   ├── [...nextauth]/route.ts  - NextAuth handler (GET/POST)
+│   ├── signup/route.ts         - Email signup with bcrypt (POST)
+│   └── verify-email/route.ts   - Email verification (GET with token)
 ├── files/
-│   ├── upload/route.ts         - POST: multipart, checks quota, updates S3+DB
-│   ├── delete/route.ts         - DELETE: removes from S3+DB
-│   ├── list/route.ts           - GET: queries DB (not S3!)
-│   ├── stats/route.ts          - GET: aggregates storage_used from DB
-│   ├── download/route.ts       - Proxy downloads with proper headers
-│   └── share/route.ts          - POST: generates share tokens
-├── folders/create/route.ts     - Creates .foldermarker in S3
-└── share/[token]/route.ts      - Public file access via token
+│   ├── upload/route.ts         - POST: multipart/form-data, checks quota, S3→DB pipeline
+│   ├── delete/route.ts         - DELETE: S3→DB removal (atomic, no rollback yet)
+│   ├── list/route.ts           - GET: queries DB only (NOT S3!), filters by parent_folder
+│   ├── stats/route.ts          - GET: aggregates SUM(size) from files table
+│   ├── download/route.ts       - GET: proxies S3 download with auth check + correct MIME
+│   └── share/route.ts          - POST: generates UUID share token, writes to files.share_token
+├── folders/create/route.ts     - POST: creates .foldermarker in S3 + DB row with is_folder=true
+└── share/[token]/route.ts      - GET: public access (no auth), validates share_token
 ```
 
-**Response pattern:** `{ success: boolean, data?: T, error?: string }`
+**Standard Response Pattern:**
+```typescript
+{ success: boolean, data?: T, error?: string }
+// Error responses use this + appropriate HTTP status (400/401/403/500)
+```
 
 ### Authentication System
 - **`lib/auth.ts`** - NextAuth config with SupabaseAdapter, Google + Credentials providers
 - **`lib/auth-helpers.ts`** - `requireAuth()`, `checkStorageQuota()`, standard response helpers
 - All file APIs use `requireAuth()` to get `user.id` for multi-tenancy
-- Email verification: Resend API (`lib/email.ts`), tokens stored in `users.verification_token`
+- Email verification: Gmail SMTP (`lib/email.ts`), tokens stored in `users.verification_token`
 - Session: JWT strategy, 30-day expiry
 
 ### Component Architecture
@@ -136,8 +142,9 @@ NEXTAUTH_SECRET=xxx
 GOOGLE_CLIENT_ID=xxx.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-xxx
 
-# Email (Resend API - resend.com)
-RESEND_API_KEY=re_xxx
+# Email (Gmail SMTP via Nodemailer)
+GMAIL_USER=your-email@gmail.com
+GMAIL_APP_PASSWORD=your-app-password
 EMAIL_FROM=noreply@yourdomain.com
 
 # Share links (used in share URL generation)
@@ -150,10 +157,17 @@ NEXT_PUBLIC_APP_URL=http://localhost:3000
 3. Verify indexes created: `idx_files_user_id`, `idx_files_share_token`, `idx_files_parent_folder`
 
 ### Docker Deployment
-- **Build on host** (Node 20 + pnpm), copy `.next` and `node_modules` to container
-- `docker-compose.yml` runs Next.js + Jenkins (+ optional Prometheus/Grafana stack)
-- Jenkins pipeline (`Jenkinsfile.simple`): checkout → build → Docker build → deploy → health check
-- Container expects `.env` file in `/home/ubuntu/app/.env` (mounted read-only)
+- **Build Strategy**: Host builds (Node 20 + pnpm), then copies `.next` and `node_modules` to Alpine container
+- **Rationale**: Faster rebuilds, smaller images (no build tools in container), consistent with Next.js 15 standalone mode
+- `docker-compose.yml` orchestrates: Next.js app + Jenkins + optional Prometheus/Grafana monitoring stack
+- Jenkins pipeline (`Jenkinsfile.simple`): 
+  1. Git checkout (force pull from `main`)
+  2. Install deps + build on host via NodeJS plugin
+  3. Docker build (copies artifacts)
+  4. Stop old container → Start new → Health check (curl localhost:3000)
+  5. Cleanup old images
+- **Config**: Container expects `.env` at `/home/ubuntu/app/.env` (mounted read-only in docker-compose)
+- **User**: Runs as non-root `nextjs:nodejs` (UID/GID 1001) for security
 
 ### Adding shadcn Components
 ```bash
@@ -162,25 +176,27 @@ npx shadcn@latest add [component-name]
 
 ## Critical Gotchas
 
-1. **Dual Persistence**: S3 upload success ≠ success. Must also write to Supabase. If DB write fails, uploaded file becomes orphan. Consider rollback or cleanup job.
+1. **Dual Persistence**: S3 upload success ≠ success. Must also write to Supabase. If DB write fails, uploaded file becomes orphan. **Known Issue**: No automatic S3 rollback on DB failure (see TODO in `app/api/files/upload/route.ts`). Consider implementing cleanup job or atomic transaction pattern.
 
-2. **List Files Source**: `/api/files/list` queries **Supabase**, not S3. S3 listing only in `StorageService.listFiles()` (not exposed via API). Keep DB in sync!
+2. **List Files Source**: `/api/files/list` queries **Supabase**, not S3. Direct S3 listing only used in `StorageService.listFiles()` (not exposed via API). The source of truth is the database - keep DB in sync with S3!
 
-3. **User Isolation**: All S3 keys and DB queries scoped by `user.id`. Never forget `WHERE user_id = ?` or attacker can access others' files.
+3. **User Isolation**: All S3 keys and DB queries scoped by `user.id`. Never forget `WHERE user_id = ?` clause or file path prefix `${userId}/`. Missing this = security vulnerability where users access others' files.
 
-4. **Storage Quota**: Enforced in `/api/files/upload` via `checkStorageQuota()`. Quota stored per-user in `users.storage_used`. Stats endpoint aggregates from `files.size` sum.
+4. **Storage Quota**: Enforced in `/api/files/upload` via `checkStorageQuota()`. Quota comparison uses `users.storage_used` (updated on upload) + `users.storage_limit` (default 10GB). Stats endpoint aggregates `SUM(files.size)` - must match `storage_used`.
 
-5. **Folder Implementation**: Folders are `.foldermarker` files in S3 + `is_folder: true` in DB. Not true directories. Path stored in `parent_folder` column.
+5. **Folder Implementation**: Folders are **not real S3 directories**. They're `.foldermarker` files in S3 + `is_folder: true` rows in DB. Navigation uses `parent_folder` column (string path, nullable for root). Parent-child relationships are path-based, not FK-based.
 
-6. **Share Tokens**: UUID stored in `files.share_token`. Public route `/share/[token]` bypasses auth. Token generation in `StorageService.generateShareToken()`.
+6. **Share Tokens**: UUID stored in `files.share_token` column. Public route `/share/[token]` bypasses auth entirely - only validates token exists. Tokens generated via `crypto.randomUUID()` in `StorageService.generateShareToken()`. No expiration implemented yet.
 
-7. **File Type Recovery**: S3 may lose Content-Type. `StorageService.getFileType()` reconstructs from extension. Always use this helper.
+7. **File Type Recovery**: S3 may lose Content-Type metadata on upload. `StorageService.getFileType()` reconstructs MIME type from file extension as fallback. Always use this helper in download/preview routes.
 
-8. **Build Config**: `next.config.mjs` ignores TypeScript/ESLint errors (`ignoreDuringBuilds: true`). This is intentional for prototyping. Fix errors but don't remove flags.
+8. **Build Config**: `next.config.mjs` sets `ignoreDuringBuilds: true` for TypeScript/ESLint. This is intentional for rapid prototyping. Fix errors but **don't remove these flags** - Jenkins pipeline depends on successful builds.
 
-9. **Email Verification**: Users can sign in before verifying, but `requireAuth(true)` blocks unverified users. Google OAuth bypasses this. Check `email_verified` or `provider === 'google'`.
+9. **Email Verification**: Users can sign in before verifying email, but `requireAuth(true)` blocks API access for unverified users. Google OAuth auto-verifies (`provider === 'google'`). Check both `email_verified` column and provider.
 
-10. **PDF Thumbnails**: Uses `pdfjs-dist` with `canvas` package (Node compatibility). Requires memory for large PDFs. See `lib/pdf-utils.ts` and `components/pdf-thumbnail.tsx`.
+10. **PDF Thumbnails**: Uses `pdfjs-dist` with `canvas` package for Node compatibility. High memory usage for large PDFs. Webpack configured to externalize `canvas` in server bundle (`next.config.mjs`). See `lib/pdf-utils.ts` for rendering logic.
+
+11. **Standalone Output**: Next.js configured with `output: 'standalone'` for Docker. This creates a self-contained `.next/standalone` directory with minimal dependencies. Jenkins copies entire `.next` folder + `node_modules` to container.
 
 ## When Adding Features
 
@@ -192,6 +208,7 @@ npx shadcn@latest add [component-name]
 
 ## Monitoring & DevOps
 - **Prometheus**: Scrapes Node Exporter (system), cAdvisor (containers), app metrics (if added)
-- **Grafana**: Pre-configured dashboards in `grafana/dashboards/system-overview.json`
 - **Jenkins**: Groovy pipeline in `Jenkinsfile.simple`, uses NodeJS 20 plugin
 - **Health checks**: Dockerfile has `/` endpoint check, Docker Compose has 30s interval
+- **Live Deployment**: Production runs on AWS EC2 at http://44.220.178.213:3000 (see README.md for current URL)
+- **Jenkins Dashboard**: http://44.220.178.213:8080 - monitors CI/CD pipeline status
