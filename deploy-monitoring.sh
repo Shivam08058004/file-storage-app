@@ -31,13 +31,16 @@ echo ""
 echo "✅ Monitoring Stack Status:"
 docker-compose -f docker-compose.monitoring.yml ps
 
+# Get EC2 public IP dynamically
+EC2_IP=$(curl -s ifconfig.me || curl -s http://checkip.amazonaws.com || echo "YOUR_EC2_IP")
+
 echo ""
 echo "🎉 Monitoring deployed successfully!"
 echo ""
 echo "📊 Access Points:"
-echo "  - Prometheus UI:  http://54.236.38.189:9090"
-echo "  - Node Exporter:  http://54.236.38.189:9100/metrics"
-echo "  - cAdvisor UI:    http://54.236.38.189:8081"
+echo "  - Prometheus UI:  http://${EC2_IP}:9090"
+echo "  - Node Exporter:  http://${EC2_IP}:9100/metrics"
+echo "  - cAdvisor UI:    http://${EC2_IP}:8081"
 echo ""
 echo "📈 Useful Prometheus Queries:"
 echo "  - CPU Usage:      100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)"

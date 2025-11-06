@@ -29,7 +29,7 @@ chmod +x deploy-monitoring.sh
 
 ### 3. Access Prometheus
 
-Open in browser: **http://54.236.38.189:9090**
+Open in browser: **http://YOUR_EC2_IP:9090** (replace with your EC2 public IP address)
 
 ## Useful Prometheus Queries
 
@@ -76,7 +76,7 @@ rate(container_network_transmit_bytes_total{name="file-storage-app"}[5m])
 
 ## How to Use Prometheus UI
 
-1. Go to **http://54.236.38.189:9090**
+1. Go to **http://YOUR_EC2_IP:9090** (replace with your EC2 public IP address)
 2. Click **"Graph"** tab
 3. Enter a query from above
 4. Click **"Execute"**

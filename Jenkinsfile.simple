@@ -57,23 +57,25 @@ pipeline {
                         # Install dependencies
                         pnpm install --frozen-lockfile
                         
-                        # Create .env file with required variables
+                        # Create .env file with required variables for build
                         # Jenkins container can't access host filesystem, so we create it here
-                        echo "Creating .env file with build-time variables..."
+                        # Note: Actual runtime values are loaded from /home/ubuntu/app/.env during deployment
+                        echo "Creating .env file with build-time placeholders..."
                         cat > .env << 'ENVFILE'
-# Placeholder .env for build - runtime values loaded from host
+# Build-time placeholders - actual values loaded from /home/ubuntu/app/.env during deployment
 NEXT_PUBLIC_SUPABASE_URL=https://placeholder.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTI4MDAsImV4cCI6MTk2MDc2ODgwMH0.placeholder
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTY0NTE5MjgwMCwiZXhwIjoxOTYwNzY4ODAwfQ.placeholder
-AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
-AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
-AWS_S3_BUCKET_NAME=placeholder-bucket
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder
+AWS_ACCESS_KEY_ID=placeholder
+AWS_SECRET_ACCESS_KEY=placeholder
+AWS_S3_BUCKET_NAME=file-storage-app-2025
 AWS_REGION=us-east-1
 NEXTAUTH_URL=http://localhost:3000
-NEXTAUTH_SECRET=placeholder-secret-key-for-build-only
-RESEND_API_KEY=re_placeholder_key
+NEXTAUTH_SECRET=placeholder-secret-for-build-only
+RESEND_API_KEY=re_placeholder
 EMAIL_FROM=noreply@example.com
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+NODE_ENV=production
 ENVFILE
                         
                         echo ".env file created for build"

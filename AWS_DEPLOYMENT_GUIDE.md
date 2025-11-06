@@ -29,10 +29,10 @@
 **CI/CD**: Jenkins with Docker  
 **Monitoring**: Prometheus + Node Exporter + cAdvisor  
 
-**Live URLs**:
-- Application: http://54.236.38.189:3000
-- Jenkins: http://54.236.38.189:8080
-- Prometheus: http://54.236.38.189:9090
+**Live URLs** (replace with your EC2 public IP):
+- Application: http://YOUR_EC2_IP:3000
+- Jenkins: http://YOUR_EC2_IP:8080
+- Prometheus: http://YOUR_EC2_IP:9090
 
 ---
 
@@ -46,21 +46,23 @@
 - **Memory**: 4 GB
 - **Storage**: 30 GB EBS
 - **Region**: us-east-1
-- **Public IP**: 54.236.38.189
+- **Public IP**: YOUR_EC2_IP (will be assigned when instance is launched)
 
 ### 2. **Amazon S3 (Simple Storage Service)**
 - **Purpose**: Store user-uploaded files
-- **Bucket Name**: file-storage-app-2025
+- **Bucket Name**: file-storage-app-2025 (must be globally unique)
 - **Region**: us-east-1
 - **Access**: Public read access for file downloads
-- **Security**: IAM user with programmatic access
+- **Security**: IAM user with programmatic access (created in new AWS account)
 - **Storage Class**: Standard (pay-as-you-go)
+- **Note**: This is a new bucket in your new AWS account
 
 ### 3. **AWS IAM (Identity and Access Management)**
 - **Purpose**: Manage S3 access credentials
-- **User**: file-storage-app-user
+- **User**: file-storage-app-user (create new user in new AWS account)
 - **Permissions**: AmazonS3FullAccess
-- **Access Type**: Programmatic access (Access Key ID + Secret)
+- **Access Type**: Programmatic access (Access Key ID + Secret Access Key)
+- **Note**: Create new IAM user and access keys in your new AWS account
 
 ### 4. **AWS Security Groups**
 - **Purpose**: Firewall rules for EC2 instance
@@ -80,13 +82,15 @@
 
 Before starting, ensure you have:
 
-- ✅ AWS Account (free tier eligible)
+- ✅ **New AWS Account** (with access to create resources)
 - ✅ GitHub Account
 - ✅ Supabase Account (free tier)
-- ✅ Gmail Account with App Password enabled
+- ✅ Gmail Account with App Password enabled (or Resend API key)
 - ✅ SSH Key Pair for EC2 access
 - ✅ Basic knowledge of Linux commands
 - ✅ Git installed locally
+
+**Important**: This guide assumes you're setting up resources in a **new AWS account**. If migrating from an old account, ensure you have access to the new account before proceeding.
 
 ---
 
@@ -169,20 +173,23 @@ You should see `users` and `files` tables.
 
 ---
 
-## Step 2: AWS S3 Storage Setup
+## Step 2: AWS S3 Storage Setup (New AWS Account)
 
 ### 2.1 Create S3 Bucket
 
-1. Login to **AWS Console**: https://console.aws.amazon.com
-2. Navigate to **S3** service
-3. Click **"Create bucket"**
-4. Configure:
-   - **Bucket name**: `file-storage-app-2025` (must be globally unique)
-   - **Region**: `us-east-1` (US East - N. Virginia)
-   - **Block all public access**: UNCHECK (we need public read)
-   - **Bucket Versioning**: Disabled
-   - **Default encryption**: SSE-S3
-5. Click **"Create bucket"**
+1. Login to **AWS Console** with your **new AWS account**: https://console.aws.amazon.com
+2. Select region: **us-east-1** (US East - N. Virginia)
+3. Navigate to **S3** service
+4. Click **"Create bucket"**
+5. Configure:
+   - **Bucket name**: `file-storage-app-2025` (must be globally unique - if taken, add suffix like `-2025-v2`)
+   - **AWS Region**: `us-east-1` (US East - N. Virginia)
+   - **Object Ownership**: ACLs disabled (recommended)
+   - **Block all public access**: UNCHECK (we need public read for file downloads)
+   - **Bucket Versioning**: Disabled (can enable later if needed)
+   - **Default encryption**: SSE-S3 (Amazon S3 managed keys)
+   - **Object Lock**: Disabled
+6. Click **"Create bucket"**
 
 ### 2.2 Configure Bucket Policy (Public Read Access)
 
@@ -225,25 +232,34 @@ You should see `users` and `files` tables.
 
 3. Click **Save changes**
 
-### 2.4 Create IAM User for S3 Access
+### 2.4 Create IAM User for S3 Access (New AWS Account)
 
-1. Navigate to **IAM** service
+1. Navigate to **IAM** service in your new AWS account
 2. Click **Users** → **Create user**
 3. **User name**: `file-storage-app-user`
 4. Click **Next**
-5. **Permissions**: Select **"Attach policies directly"**
+5. **Set permissions**: Select **"Attach policies directly"**
 6. Search and select: **AmazonS3FullAccess**
+   - This policy provides full access to S3 buckets
+   - For production, consider creating a custom policy with least privilege
 7. Click **Next** → **Create user**
 
 ### 2.5 Generate Access Keys
 
-1. Click on the created user
+1. Click on the created user (`file-storage-app-user`)
 2. Go to **Security credentials** tab
-3. Click **"Create access key"**
-4. Select **"Application running on AWS compute service"** → Continue
-5. Copy and save securely:
-   - **Access Key ID**: `AKIA...`
-   - **Secret Access Key**: `wJalr...` (shown only once!)
+3. Scroll to **Access keys** section
+4. Click **"Create access key"**
+5. Select use case: **"Application running on AWS compute service"** → **Next**
+6. (Optional) Add description: "File Storage App S3 Access"
+7. Click **"Create access key"**
+8. **IMPORTANT**: Copy and save securely:
+   - **Access Key ID**: `AKIA...` (starts with AKIA)
+   - **Secret Access Key**: `wJalr...` (long string - shown only once!)
+   - **Download CSV** or copy to a secure password manager
+9. Click **"Done"**
+
+**Security Note**: Store these credentials securely. You'll need them for the `.env` file on your EC2 instance.
 
 ---
 
@@ -299,57 +315,74 @@ Run: `node test-email.js`
 
 ## Step 4: AWS EC2 Instance Setup
 
-### 4.1 Launch EC2 Instance
+### 4.1 Launch EC2 Instance (New AWS Account)
 
-1. Go to **EC2 Dashboard**
-2. Click **"Launch Instance"**
-3. Configure:
+1. Go to **EC2 Dashboard** in your new AWS account
+2. Select region: **us-east-1** (same as S3 bucket)
+3. Click **"Launch Instance"**
+4. Configure:
 
    **Name**: `file-storage-app-server`
    
    **AMI**: Ubuntu Server 24.04 LTS (64-bit x86)
    
-   **Instance Type**: c7i-flex.large (2 vCPU, 4 GB RAM)
+   **Instance Type**: 
+   - **c7i-flex.large** (2 vCPU, 4 GB RAM) - recommended for production
+   - **t3.medium** (2 vCPU, 4 GB RAM) - cost-effective alternative
+   - **t3.small** (2 vCPU, 2 GB RAM) - budget option
    
    **Key Pair**: 
-   - Create new or select existing
-   - Download `.pem` file if creating new
+   - Create new key pair or select existing
+   - Name: `file-storage-app-key`
+   - Key pair type: RSA
+   - Private key file format: `.pem` (for Mac/Linux) or `.ppk` (for Windows PuTTY)
+   - **Download and save the key file securely** - you'll need it to SSH into the instance
    
    **Network Settings**:
-   - VPC: Default
-   - Auto-assign public IP: Enable
-   - Firewall: Create new security group
+   - VPC: Default VPC
+   - Subnet: Default subnet
+   - Auto-assign public IP: **Enable**
+   - Firewall (Security Groups): Create new security group
+   - Security group name: `file-storage-app-sg`
    
-   **Security Group Rules**:
+   **Add Inbound Rules**:
    ```
-   SSH          TCP  22    0.0.0.0/0
-   HTTP         TCP  80    0.0.0.0/0
-   HTTPS        TCP  443   0.0.0.0/0
-   Custom TCP   TCP  3000  0.0.0.0/0  (Next.js)
-   Custom TCP   TCP  8080  0.0.0.0/0  (Jenkins)
-   Custom TCP   TCP  8081  0.0.0.0/0  (cAdvisor)
-   Custom TCP   TCP  9090  0.0.0.0/0  (Prometheus)
-   Custom TCP   TCP  9100  0.0.0.0/0  (Node Exporter)
+   Type        Protocol  Port Range  Source        Description
+   SSH         TCP       22           My IP         SSH access
+   HTTP        TCP       80           0.0.0.0/0     HTTP (future use)
+   HTTPS       TCP       443          0.0.0.0/0     HTTPS (future use)
+   Custom TCP  TCP       3000         0.0.0.0/0     Next.js App
+   Custom TCP  TCP       8080         0.0.0.0/0     Jenkins
+   Custom TCP  TCP       8081         0.0.0.0/0     cAdvisor
+   Custom TCP  TCP       9090         0.0.0.0/0     Prometheus
+   Custom TCP  TCP       9100         0.0.0.0/0     Node Exporter
    ```
    
-   **Storage**: 30 GB gp3
+   **Configure Storage**:
+   - Size: **30 GB** (minimum)
+   - Volume type: **gp3** (General Purpose SSD)
+   - Delete on termination: Uncheck (to preserve data)
 
-4. Click **"Launch instance"**
-5. Wait for **Status: Running**
-6. Note the **Public IPv4 address** (e.g., 54.236.38.189)
+5. Click **"Launch instance"**
+6. Wait for instance status: **Running** (green checkmark)
+7. Click on the instance ID to view details
+8. **Copy the Public IPv4 address** (e.g., `54.236.38.189`)
+   - Save this IP - you'll need it for `.env` file and accessing the application
 
 ### 4.2 Connect to EC2 Instance
 
 **Windows (PowerShell)**:
 ```powershell
-ssh -i "your-key.pem" ubuntu@54.236.38.189
+ssh -i "your-key.pem" ubuntu@YOUR_EC2_IP
 ```
 
 **Mac/Linux**:
 ```bash
 chmod 400 your-key.pem
-ssh -i "your-key.pem" ubuntu@54.236.38.189
+ssh -i "your-key.pem" ubuntu@YOUR_EC2_IP
 ```
+
+Replace `YOUR_EC2_IP` with your actual EC2 public IP address.
 
 ### 4.3 Initial Server Setup
 
@@ -459,15 +492,18 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc...your-anon-key
 SUPABASE_SERVICE_ROLE_KEY=eyJhbGc...your-service-role-key
 
-# AWS S3 Storage
+# AWS S3 Storage (NEW AWS ACCOUNT)
+# Get these from: AWS Console → IAM → Users → file-storage-app-user → Security Credentials
 AWS_ACCESS_KEY_ID=AKIA...your-access-key
-AWS_SECRET_ACCESS_KEY=your-secret-key
+AWS_SECRET_ACCESS_KEY=your-secret-access-key
 AWS_S3_BUCKET_NAME=file-storage-app-2025
 AWS_REGION=us-east-1
 
 # NextAuth Configuration
-NEXTAUTH_URL=http://54.236.38.189:3000
-NEXTAUTH_SECRET=your-random-secret-key-here
+# Replace YOUR_EC2_IP with your actual EC2 public IP address
+NEXTAUTH_URL=http://YOUR_EC2_IP:3000
+# Generate with: openssl rand -base64 32
+NEXTAUTH_SECRET=your-generated-secret-key-here
 
 # Gmail SMTP
 GMAIL_USER=your-email@gmail.com
@@ -477,7 +513,8 @@ GMAIL_APP_PASSWORD=your-app-password
 EMAIL_FROM=noreply@yourdomain.com
 
 # App Configuration
-NEXT_PUBLIC_APP_URL=http://54.236.38.189:3000
+# Replace YOUR_EC2_IP with your actual EC2 public IP address
+NEXT_PUBLIC_APP_URL=http://YOUR_EC2_IP:3000
 NODE_ENV=production
 ```
 
@@ -506,7 +543,7 @@ Copy the password output.
 
 ### 5.2 Access Jenkins Web UI
 
-1. Open browser: **http://54.236.38.189:8080**
+1. Open browser: **http://YOUR_EC2_IP:8080** (replace with your EC2 IP)
 2. Paste the initial admin password
 3. Click **"Install suggested plugins"**
 4. Wait for plugin installation (~5 minutes)
@@ -519,7 +556,7 @@ Copy the password output.
    - **Full name**: Your Name
    - **Email**: your-email@gmail.com
 2. Click **"Save and Continue"**
-3. **Jenkins URL**: `http://54.236.38.189:8080`
+3. **Jenkins URL**: `http://YOUR_EC2_IP:8080` (replace with your EC2 IP)
 4. Click **"Save and Finish"** → **"Start using Jenkins"**
 
 ### 5.4 Install Required Jenkins Plugins
@@ -593,7 +630,7 @@ Click **"Save"**
 1. Go to your GitHub repo: https://github.com/Shivam08058004/file-storage-app
 2. Click **"Settings"** → **"Webhooks"** → **"Add webhook"**
 3. Configure:
-   - **Payload URL**: `http://54.236.38.189:8080/github-webhook/`
+   - **Payload URL**: `http://YOUR_EC2_IP:8080/github-webhook/` (replace with your EC2 IP)
    - **Content type**: `application/json`
    - **Which events**: Just the push event
    - ✅ Active
@@ -675,7 +712,7 @@ docker inspect file-storage-app | grep -A 5 "Health"
 
 ### 6.3 Access Application
 
-Open in browser: **http://54.236.38.189:3000**
+Open in browser: **http://YOUR_EC2_IP:3000** (replace with your EC2 IP)
 
 You should see the File Storage Application login page.
 
@@ -730,13 +767,15 @@ docker ps
 
 ### 7.3 Access Monitoring UIs
 
-1. **Prometheus**: http://54.236.38.189:9090
-2. **Node Exporter**: http://54.236.38.189:9100/metrics
-3. **cAdvisor**: http://54.236.38.189:8081
+1. **Prometheus**: http://YOUR_EC2_IP:9090
+2. **Node Exporter**: http://YOUR_EC2_IP:9100/metrics
+3. **cAdvisor**: http://YOUR_EC2_IP:8081
+
+Replace `YOUR_EC2_IP` with your actual EC2 public IP address.
 
 ### 7.4 Check Targets Status
 
-Go to: **http://54.236.38.189:9090/targets**
+Go to: **http://YOUR_EC2_IP:9090/targets** (replace with your EC2 IP)
 
 All targets should show **"UP"**:
 - ✅ prometheus (1/1 up)
@@ -971,7 +1010,7 @@ rate(node_network_receive_bytes_total{device!="lo"}[5m]) / 1024 / 1024 > 100
 
 ### Test 1: User Registration
 
-1. Go to http://54.236.38.189:3000
+1. Go to http://YOUR_EC2_IP:3000 (replace with your EC2 IP)
 2. Click **"Sign Up"**
 3. Enter email and password
 4. Click **"Create Account"**
@@ -986,7 +1025,7 @@ rate(node_network_receive_bytes_total{device!="lo"}[5m]) / 1024 / 1024 > 100
 
 ### Test 3: User Login
 
-1. Go to http://54.236.38.189:3000
+1. Go to http://YOUR_EC2_IP:3000 (replace with your EC2 IP)
 2. Enter credentials
 3. Click **"Sign In"**
 4. **Expected**: Redirected to dashboard
@@ -1369,7 +1408,7 @@ docker network inspect app-network
 2. Click webhook → Recent Deliveries
 
 **Solutions**:
-1. Verify webhook URL: `http://54.236.38.189:8080/github-webhook/`
+1. Verify webhook URL: `http://YOUR_EC2_IP:8080/github-webhook/` (replace with your EC2 IP)
 2. Check Jenkins is accessible from internet
 3. Verify security group allows port 8080
 4. Re-create webhook
@@ -1562,10 +1601,10 @@ You have successfully deployed a production-ready file storage application with:
 - Firewall configuration
 - IAM permissions
 
-**Your application is now live and accessible at**:
-- **App**: http://54.236.38.189:3000
-- **Jenkins**: http://54.236.38.189:8080
-- **Prometheus**: http://54.236.38.189:9090
+**Your application is now live and accessible at** (replace with your EC2 IP):
+- **App**: http://YOUR_EC2_IP:3000
+- **Jenkins**: http://YOUR_EC2_IP:8080
+- **Prometheus**: http://YOUR_EC2_IP:9090
 
 ---
 
